@@ -24,8 +24,13 @@ export class GameScene extends Scene {
     }
 
     preload() {
-        // Generate textures programmatically since we don't have assets yet
-        this.generateTextures();
+        // Load external assets
+        this.load.image('phone', '/assets/phone.jpg');
+        this.load.image('tv', '/assets/tv.jpg');
+        this.load.image('watch', '/assets/watch.jpg');
+        this.load.image('earbuds', '/assets/earbuds.jpg');
+        this.load.image('ovaltine', '/assets/ovaltine.jpg');
+        this.load.image('milk', '/assets/milk.jpg');
     }
 
     create() {
@@ -48,10 +53,8 @@ export class GameScene extends Scene {
             this.rows = CONSTANTS.GRID_ROWS; // Default 8
         }
 
-        // Generate textures if not already present
-        if (!this.textures.exists('candy_0')) {
-            this.generateTextures();
-        }
+        // Force texture generation (overwriting any previous ones)
+        this.generateTextures();
 
         this.updateBoardPosition();
 
@@ -134,61 +137,137 @@ export class GameScene extends Scene {
     }
 
     private generateTextures() {
-        const graphics = this.make.graphics({ x: 0, y: 0 });
         const S = CONSTANTS.CANDY_SIZE;
-        const PADDING = S * 0.05; // 5% padding
+        const PADDING = S * 0.05;
         const DRAW_SIZE = S - (PADDING * 2);
-        const RADIUS = S * 0.2; // 20% radius
+        const RADIUS = S * 0.2;
         const SHINE_OFFSET = PADDING * 2;
         const SHINE_SIZE = DRAW_SIZE * 0.4;
         const STROKE_WIDTH = S * 0.05;
 
         // Particle Texture (Star)
-        graphics.clear();
-        graphics.fillStyle(0xffffff, 1);
-        const starSize = 20;
-        graphics.fillCircle(starSize / 2, starSize / 2, starSize / 2);
-        graphics.generateTexture('particle', starSize, starSize);
+        const pCanvas = document.createElement('canvas');
+        pCanvas.width = 20;
+        pCanvas.height = 20;
+        const pCtx = pCanvas.getContext('2d')!;
+        pCtx.fillStyle = '#ffffff';
+        pCtx.beginPath();
+        pCtx.arc(10, 10, 10, 0, Math.PI * 2);
+        pCtx.fill();
+        if (this.textures.exists('particle')) this.textures.remove('particle');
+        this.textures.addCanvas('particle', pCanvas);
 
         CANDY_COLORS.forEach((color, index) => {
-            graphics.clear();
-            graphics.fillStyle(color, 1);
-            // Square with rounded corners
-            graphics.fillRoundedRect(PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
-
-            // Shine effect
-            graphics.fillStyle(0xffffff, 0.4);
-            graphics.fillRoundedRect(SHINE_OFFSET, SHINE_OFFSET, SHINE_SIZE, SHINE_SIZE, RADIUS * 0.6);
-
-            graphics.generateTexture(`candy_${index}`, S, S);
+            this.createCandyTexture(`candy_${index}`, color, index, 'normal');
         });
 
         // Special candies textures (Striped)
         CANDY_COLORS.forEach((color, index) => {
-            // Horizontal Striped
-            graphics.clear();
-            graphics.fillStyle(color, 1);
-            graphics.fillRoundedRect(PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
-            graphics.lineStyle(STROKE_WIDTH, 0xffffff);
-            graphics.lineBetween(PADDING * 2, S / 2, S - PADDING * 2, S / 2);
-            graphics.generateTexture(`candy_striped_h_${index}`, S, S);
-
-            // Vertical Striped
-            graphics.clear();
-            graphics.fillStyle(color, 1);
-            graphics.fillRoundedRect(PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
-            graphics.lineStyle(STROKE_WIDTH, 0xffffff);
-            graphics.lineBetween(S / 2, PADDING * 2, S / 2, S - PADDING * 2);
-            graphics.generateTexture(`candy_striped_v_${index}`, S, S);
-
-            // Wrapped
-            graphics.clear();
-            graphics.fillStyle(color, 1);
-            graphics.fillRoundedRect(PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
-            graphics.lineStyle(STROKE_WIDTH / 2, 0xffffff);
-            graphics.strokeRoundedRect(PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
-            graphics.generateTexture(`candy_wrapped_${index}`, S, S);
+            this.createCandyTexture(`candy_striped_h_${index}`, color, index, 'striped_h');
+            this.createCandyTexture(`candy_striped_v_${index}`, color, index, 'striped_v');
+            this.createCandyTexture(`candy_wrapped_${index}`, color, index, 'wrapped');
         });
+    }
+
+    private createCandyTexture(key: string, color: number, index: number, type: string) {
+        const S = CONSTANTS.CANDY_SIZE;
+        const PADDING = S * 0.05;
+        const DRAW_SIZE = S - (PADDING * 2);
+        const RADIUS = S * 0.2;
+        const SHINE_OFFSET = PADDING * 2;
+        const SHINE_SIZE = DRAW_SIZE * 0.4;
+        const STROKE_WIDTH = S * 0.05;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = S;
+        canvas.height = S;
+        const ctx = canvas.getContext('2d')!;
+
+        const hexColor = `#${color.toString(16).padStart(6, '0')}`;
+
+        // Draw Base
+        ctx.fillStyle = hexColor;
+        this.drawRoundedRect(ctx, PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
+        ctx.fill();
+
+        // Draw Shine
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        this.drawRoundedRect(ctx, SHINE_OFFSET, SHINE_OFFSET, SHINE_SIZE, SHINE_SIZE, RADIUS * 0.6);
+        ctx.fill();
+
+        // Type Specifics
+        if (type === 'striped_h') {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = STROKE_WIDTH;
+            ctx.beginPath();
+            ctx.moveTo(PADDING * 2, S / 2);
+            ctx.lineTo(S - PADDING * 2, S / 2);
+            ctx.stroke();
+        } else if (type === 'striped_v') {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = STROKE_WIDTH;
+            ctx.beginPath();
+            ctx.moveTo(S / 2, PADDING * 2);
+            ctx.lineTo(S / 2, S - PADDING * 2);
+            ctx.stroke();
+        } else if (type === 'wrapped') {
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = STROKE_WIDTH / 2;
+            this.drawRoundedRect(ctx, PADDING, PADDING, DRAW_SIZE, DRAW_SIZE, RADIUS);
+            ctx.stroke();
+        }
+
+        // Overlay Image on tiles: Red (0), Green (1), Blue (2), Yellow (3), Magenta (4), Cyan (5)
+        const assetMap: { [key: number]: string } = {
+            0: 'phone',
+            1: 'tv',
+            2: 'watch',
+            3: 'earbuds',
+            4: 'ovaltine',
+            5: 'milk'
+        };
+        const assetKey = assetMap[index];
+        if (assetKey && this.textures.exists(assetKey)) {
+            const assetSource = this.textures.get(assetKey).getSourceImage() as HTMLImageElement;
+            if (assetSource.width > 0) {
+                // Draw a white circular background for the icon to make it pop
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(S / 2, S / 2, DRAW_SIZE * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+
+                const imgRatio = assetSource.width / assetSource.height;
+                let targetW = DRAW_SIZE * 0.7;
+                let targetH = targetW / imgRatio;
+
+                if (targetH > DRAW_SIZE * 0.7) {
+                    targetH = DRAW_SIZE * 0.7;
+                    targetW = targetH * imgRatio;
+                }
+
+                const offsetX = (S - targetW) / 2;
+                const offsetY = (S - targetH) / 2;
+
+                ctx.drawImage(assetSource, offsetX, offsetY, targetW, targetH);
+            }
+        }
+
+        if (this.textures.exists(key)) this.textures.remove(key);
+        this.textures.addCanvas(key, canvas);
+    }
+
+    private drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
     }
 
     private createBoard() {
@@ -277,6 +356,14 @@ export class GameScene extends Scene {
         const c1 = candy1.getData('col');
         const r2 = candy2.getData('row');
         const c2 = candy2.getData('col');
+
+        // Validate that row/col data exists and grid positions are valid
+        if (r1 === undefined || c1 === undefined || r2 === undefined || c2 === undefined ||
+            !this.grid[r1] || !this.grid[r2]) {
+            console.warn('Invalid candy data, aborting swap');
+            this.isProcessing = false;
+            return;
+        }
 
         // Swap in grid
         this.grid[r1][c1] = candy2;
