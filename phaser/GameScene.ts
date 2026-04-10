@@ -17,6 +17,9 @@ export class GameScene extends Scene {
     private soundManager: SoundManager;
     private particleEmitter!: GameObjects.Particles.ParticleEmitter;
     private rows: number = CONSTANTS.GRID_ROWS;
+    private comboChainLevel: number = 1;
+    private comboGifEl: HTMLImageElement | null = null;
+    private comboSounds: { [level: number]: Phaser.Sound.BaseSound } = {};
 
     constructor() {
         super('GameScene');
@@ -31,6 +34,12 @@ export class GameScene extends Scene {
         this.load.image('earbuds', '/assets/earbuds.jpg');
         this.load.image('ovaltine', '/assets/ovaltine.jpg');
         this.load.image('milk', '/assets/milk.jpg');
+        // Combo sound effects (all 5 chain levels)
+        this.load.audio('combo1x',     '/assets/soundFx/combo%201x.mp3');
+        this.load.audio('combo2x',     '/assets/soundFx/double%20combo.mp3');
+        this.load.audio('combo3x',     '/assets/soundFx/3ple%20combo.mp3');
+        this.load.audio('combo4x',     '/assets/soundFx/combo%204X.mp3');
+        this.load.audio('combo5x',     '/assets/soundFx/combo%205X.mp3');
     }
 
     create() {
@@ -71,6 +80,13 @@ export class GameScene extends Scene {
         // Center the board
         this.createBoard();
         this.input.on('gameobjectdown', this.onCandyClicked, this);
+
+        // Init combo sounds for all chain levels
+        this.comboSounds[1] = this.sound.add('combo1x', { volume: 0.85 });
+        this.comboSounds[2] = this.sound.add('combo2x', { volume: 0.85 });
+        this.comboSounds[3] = this.sound.add('combo3x', { volume: 0.85 });
+        this.comboSounds[4] = this.sound.add('combo4x', { volume: 0.85 });
+        this.comboSounds[5] = this.sound.add('combo5x', { volume: 0.85 });
 
         // Handle Resize
         this.scale.on('resize', this.resize, this);
@@ -345,6 +361,7 @@ export class GameScene extends Scene {
 
     private swapCandies(candy1: GameObjects.Sprite, candy2: GameObjects.Sprite) {
         this.isProcessing = true;
+        this.comboChainLevel = 1; // Reset combo chain on each new swap
 
         this.soundManager.playSwap();
 
@@ -544,6 +561,20 @@ export class GameScene extends Scene {
         EventBus.emit('score-update', this.score);
         this.soundManager.playMatch();
 
+        // Combo effect — trigger for levels 1-5 (cascading chain reactions)
+        if (this.comboChainLevel >= 1 && this.comboChainLevel <= 5) {
+            const allCells = rawMatches.flatMap(m => m.cells);
+            const avgRow = allCells.reduce((s, cell) => s + cell.r, 0) / allCells.length;
+            const avgCol = allCells.reduce((s, cell) => s + cell.c, 0) / allCells.length;
+            const worldX = this.startX + avgCol * CONSTANTS.CANDY_SIZE;
+            const worldY = this.startY + avgRow * CONSTANTS.CANDY_SIZE;
+            const colorCode = rawMatches.length > 0 && rawMatches[0].type !== undefined 
+                ? CANDY_COLORS[rawMatches[0].type as number] || 0xffffff 
+                : 0xffffff;
+            this.showComboEffect(worldX, worldY, this.comboChainLevel, colorCode);
+        }
+        this.comboChainLevel++;
+
         // Process special creations (adjust pendingDestruction)
         specialCreatons.forEach(creation => {
             // Don't destroy the one becoming special
@@ -563,6 +594,68 @@ export class GameScene extends Scene {
             this.time.delayedCall(250, () => {
                 this.dropCandies();
             });
+        });
+    }
+
+    private showComboEffect(worldX: number, worldY: number, level: number, colorCode: number = 0xffffff) {
+        // Play the matching combo sound
+        const snd = this.comboSounds[level];
+        if (snd) {
+            if (snd.isPlaying) snd.stop();
+            snd.play();
+        }
+
+        // Determine which GIF to show
+        const gifMap: { [key: number]: string } = {
+            1: '/assets/vfx/combo1.gif',
+            2: '/assets/vfx/double%20combo.gif',
+            3: '/assets/vfx/3ple%20combo.gif',
+            4: '/assets/vfx/Combo%204x.gif',
+            5: '/assets/vfx/Combo%205x.gif',
+        };
+        const gifSrc = gifMap[level];
+        if (!gifSrc) return;
+
+        // GIF DOM overlay — always centered on screen at 2x zoom
+        // Remove any existing combo gif
+        if (this.comboGifEl) {
+            this.comboGifEl.remove();
+            this.comboGifEl = null;
+        }
+
+        const img = document.createElement('img');
+        // Force GIF to restart by appending timestamp
+        img.src = `${gifSrc}?t=${Date.now()}`;
+        
+        const r = (colorCode >> 16) & 255;
+        const g = (colorCode >> 8) & 255;
+        const b = colorCode & 255;
+
+        img.style.cssText = [
+            'position: fixed',
+            'width: 500px',
+            'height: auto',
+            'left: 50%',
+            'top: 50%',
+            'transform: translate(-50%, -50%)',
+            'z-index: 9999',
+            'pointer-events: none',
+            'opacity: 0.88',
+            'transition: opacity 0.4s ease',
+            'image-rendering: auto',
+            `filter: drop-shadow(0 0 6px rgba(255,255,255,1)) drop-shadow(0 0 14px rgba(${r},${g},${b},0.95)) drop-shadow(0 0 28px rgba(${r},${g},${b},0.7))`,
+        ].join('; ');
+        document.body.appendChild(img);
+        this.comboGifEl = img;
+
+        // Fade out near the end
+        this.time.delayedCall(1600, () => {
+            if (img.parentNode) img.style.opacity = '0';
+        });
+        // Remove from DOM
+        this.time.delayedCall(2000, () => {
+            if (img.parentNode) img.remove();
+            if (this.comboGifEl === img) this.comboGifEl = null;
         });
     }
 
